@@ -1,7 +1,5 @@
 from bs4 import BeautifulSoup
-import requests
-from utils import export_to_excel
-from pandas import to_datetime
+from utils import (export_to_excel, get_soup, convert_to_date,)
 
 
 def product_link_generator(end: int = 100) -> list:
@@ -24,7 +22,7 @@ def product_link_generator(end: int = 100) -> list:
 def get_product_data(bs_soup: BeautifulSoup) -> dict:
     table = bs_soup.find("div", class_="table-wrapper table-wrapper-pairs")
 
-    data = {"Publication Date": ""}
+    data = {"Product Name": ""}
     for row in table.find_all("tr"):
         header = row.find("th").text
         value = row.find("td").text
@@ -35,17 +33,21 @@ def get_product_data(bs_soup: BeautifulSoup) -> dict:
     return data
 
 
-def convert_to_date(dataframe):
-    try:
-        dataframe['Publication Date'] = to_datetime(dataframe['Publication Date'], format="%B %d, %Y",
-                                                    errors='coerce').dt.date
-    except KeyError:
-        print("Unable to convert Publication date column to date..")
-    return dataframe
+def get_total_record_count():
+    count = 12_421
+    url = "https://campaigns.sgs.com/en/vr/product-recalls-light"
+    page_soup = get_soup(url)
+    record_count_info = page_soup.find("div", class_="grid grid--2").text.strip()
+
+    for word in record_count_info.split(" "):
+        try:
+            count = int(word)
+        except ValueError:
+            pass
+    return count
 
 
 if __name__ == "__main__":
-    TOTAL_NUMBER_OF_RECORDS = 12_421
     SLEEP_TIME = 0.1     # in seconds
     EXPORT_EXCEL_FILENAME = "data/sgs_data_extended.xlsx"
     requests_header = {
@@ -53,28 +55,21 @@ if __name__ == "__main__":
                       "Chrome/120.0.0.0 Safari/537.36"
     }
 
-    product_links = product_link_generator(TOTAL_NUMBER_OF_RECORDS)
+    total_number_of_records = get_total_record_count()
+    product_links = product_link_generator(total_number_of_records)
 
     master_data = []
 
     try:
         for link in product_links:
             print(link)
-            try:
-                response = requests.get(link)
-            except KeyboardInterrupt:
-                break
-            except:
-                print(f"unable to get html from {link}")
+            soup = get_soup(link)
+
+            if not soup:
                 continue
 
-            if not response.ok:
-                print(response)
-                continue
-
-            soup = BeautifulSoup(response.content, "html.parser")
             table_data = get_product_data(soup)
-            table_data["'Publication Date'"] = soup.find("div", class_="page-header").text.strip()
+            table_data["Product Name"] = soup.find("div", class_="page-header").text.strip()
             table_data["original recall notice url"] = soup.find("p").a.attrs.get("href")
             master_data.append(table_data)
 

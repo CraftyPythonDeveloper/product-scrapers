@@ -1,9 +1,11 @@
+from typing import Union, Callable
 from urllib.parse import urlsplit
+from bs4 import BeautifulSoup
 import pandas as pd
-from collections.abc import Callable
+import requests
 
 
-def extract_table_data(table_soup) -> list:
+def extract_table_data(table_soup: BeautifulSoup) -> list:
     """
     A generic function to extract the table data from html if format is as below
         <thead>
@@ -73,3 +75,46 @@ def export_to_excel(data: list, excel_filename: str, validate_func: Callable = c
     df = validate_func(df)
     df.to_excel(excel_filename)
     return True
+
+
+def get_soup(url: str) -> Union[BeautifulSoup, None]:
+    """
+    Function to fetch the url and convert it to BeautifulSoup object. If error while fetching return None
+    :param url:
+    :return: BeautifulSoup object or None
+    """
+    requests_header = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) "
+                      "Chrome/120.0.0.0 Safari/537.36"
+    }
+
+    try:
+        response = requests.get(url, headers=requests_header)
+
+        if not response.ok:
+            print("unable to get 200 status from url..", response)
+            return
+
+        return BeautifulSoup(response.content, "html.parser")
+
+    except KeyboardInterrupt:
+        raise KeyboardInterrupt
+
+    except Exception as e:
+        print(e)
+        return
+
+
+def convert_to_date(dataframe: pd.DataFrame) -> pd.DataFrame:
+    """
+    Function to convert the "Publication Date" column into date format.
+
+    :param dataframe:
+    :return: dataframe
+    """
+    try:
+        dataframe['Publication Date'] = pd.to_datetime(dataframe['Publication Date'], format="%B %d, %Y",
+                                                       errors='ignore').dt.date
+    except KeyError:
+        print("Unable to convert Publication date column to date..")
+    return dataframe
